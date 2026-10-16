@@ -74,44 +74,8 @@ Abstraction means **leaving out irrelevant information**  keeping only the state
 
 Nodes are **states** (towns); links are **actions** (highway journeys), labelled with their **step cost in kilometres**. Edges are directed in the direction of travel towards the goal,  a second abstraction, since a shortest path to Kisumu never requires driving back east.
 
-```mermaid
-graph LR
-    NBO["Nairobi<br/>(initial state)"]
-    THK[Thika]
-    NYR[Nyeri]
-    NYH[Nyahururu]
-    NVS[Naivasha]
-    NRK[Narok]
-    NKU[Nakuru]
-    BMT[Bomet]
-    KRC[Kericho]
-    ELD[Eldoret]
-    KSI[Kisii]
-    KKG[Kakamega]
-    KSM["Kisumu<br/>(goal state)"]
+![alt text](image.png)
 
-    NBO -->|45| THK
-    NBO -->|90| NVS
-    NBO -->|142| NRK
-    THK -->|106| NYR
-    NYR -->|104| NYH
-    NYH -->|64| NKU
-    NVS -->|71| NKU
-    NVS -->|90| NRK
-    NRK -->|97| BMT
-    NKU -->|110| KRC
-    NKU -->|155| ELD
-    BMT -->|50| KRC
-    BMT -->|68| KSI
-    KRC -->|90| KSM
-    KRC -->|85| KSI
-    KSI -->|118| KSM
-    ELD -->|80| KKG
-    KKG -->|52| KSM
-
-    style NBO fill:#1C3F63,color:#fff
-    style KSM fill:#127A73,color:#fff
-```
 
 ### 2.4 Adjacency / Step Cost Table
 
@@ -142,46 +106,7 @@ graph LR
 
 The tree starts at the **initial state** (root) and branches out through actions to other states within the state space. Nodes are shown with their **cumulative path cost g(n)** in kilometres.
 
-```mermaid
-graph TD
-    R["Nairobi<br/>g = 0"]
-
-    R --> A["Thika<br/>g = 45"]
-    R --> B["Naivasha<br/>g = 90"]
-    R --> C["Narok<br/>g = 142"]
-
-    A --> A1["Nyeri<br/>g = 151"]
-    A1 --> A2["Nyahururu<br/>g = 255"]
-    A2 --> A3["Nakuru<br/>g = 319 ✗"]
-
-    B --> B1["Nakuru<br/>g = 161"]
-    B --> B2["Narok<br/>g = 180 ✗"]
-
-    B1 --> B3["Kericho<br/>g = 271"]
-    B1 --> B4["Eldoret<br/>g = 316"]
-
-    B3 --> B5["KISUMU<br/>g = 361 ✓"]
-    B3 --> B6["Kisii<br/>g = 356 ✗"]
-
-    B4 --> B7["Kakamega<br/>g = 396"]
-    B7 --> B8["Kisumu<br/>g = 448"]
-
-    C --> C1["Bomet<br/>g = 239"]
-    C1 --> C2["Kericho<br/>g = 289 ✗"]
-    C1 --> C3["Kisii<br/>g = 307"]
-    C3 --> C4["Kisumu<br/>g = 425"]
-
-    style R fill:#1C3F63,color:#fff
-    style B5 fill:#127A73,color:#fff
-    style A3 fill:#F3DCDC
-    style B2 fill:#F3DCDC
-    style B6 fill:#F3DCDC
-    style C2 fill:#F3DCDC
-```
-
-**Legend** — ✓ goal state reached at least cost · ✗ branch pruned: a cheaper path to that same state already exists
-
----
+![alt text](image-1.png)
 
 ## 3. Determining the Optimal Path
 
