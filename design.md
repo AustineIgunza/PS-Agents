@@ -1,201 +1,255 @@
-# ICS 3202: Artificial Intelligence
-# Practical Exercise 3: Designing a Searching Agent
+# Designing a Searching Agent — Self-Driving Trailer
 
+**ICS 3202: Artificial Intelligence — Practical Exercise 3**
+*
 
-**Group:16**  
+**Problem:** A self-driving trailer must travel from **Nairobi** to **Kisumu** across Kenya's highway network at the lowest possible path cost.
 
-IGUNZA AUSTINE -166990
-CHIEF MWIJUKYE -192468
-PAUL KIRAGU -190135
+**Group members**
+Austine Igunza -166990
+Paul Kiragu - 190135
+Chief Mwijukwe - 192468
+---
 
-# 1. Agent design
+## 1. Agent Design
 
-The agent is a self-driving trailer transporting cargo from Nairobi to Kisumu. Its route planner seeks a feasible route with minimum total road distance. Safe and legal operation remains a constraint on its execution.
+### 1.1 PEAS Framework
 
-### 1.1 PEAS framework 
-Component: Application to the self-driving trailer 
+| Element | Specification for the self-driving trailer |
+|---|---|
+| **Performance measure** | Cargo delivered safely and undamaged; shortest total distance travelled (km) from Nairobi to Kisumu; least trip time; fuel efficiency; zero traffic-law violations; zero collisions with other road users; axle load within weighbridge limits |
+| **Environment** | Kenya's highway network (A104 Nairobi–Nakuru–Eldoret, B1 Nakuru–Kericho–Kisumu, B3 Nairobi–Narok, A2 Nairobi–Thika–Nyeri); towns and junctions; other vehicles; pedestrians, cyclists and livestock; traffic law and road signage; weighbridges and police checkpoints; weather; road surface condition; fuel stations |
+| **Actuators** | Steering wheel; accelerator; brake; gear/transmission system; indicators; headlights; horn |
+| **Sensors** | GPS receiver; cameras; LiDAR / sonar radar; speedometer; odometer; fuel gauge; axle-load sensors; tyre-pressure sensors |
 
-1. Performance measure - Minimise total distance from Nairobi to Kisumu while arriving safely, obeying traffic rules, preserving cargo and respecting vehicle constraints. 
-2. Environment - Kenya's highway network; towns, junctions, road surfaces, other vehicles, pedestrians, weather, traffic signals and destination/loading facilities. 
-3. Actuators - Steering, accelerator, brakes, transmission, indicators, horn and lights. 
-4. Sensors - GPS, cameras, radar/lidar where fitted, speed and wheel sensors, inertial sensors and vehicle-status sensors; digital maps provide stored road information. 
+**Note on P:** the performance measure is **distance in kilometres**, because the path cost function in Section 3 must reflect the performance measure (Problem Formulation, factor 4).
 
-### 1.2 Five environment dimensions
+### 1.2 Environment Definitions
 
-| Dimension | Actual driving environment | Justification |
-| --- | --- | --- |
-| Observability | Partially observable | Sensors cannot reveal every hazard, other drivers' intentions or all conditions beyond their range. |
-| Determinism | Stochastic | Other road users and changing conditions make action outcomes uncertain. |
-| Episodic/sequential | Sequential | Earlier choices affect later location, available routes and driving decisions. |
-| Static/dynamic | Dynamic | Vehicles, pedestrians and road conditions can change while the agent decides. |
-| Discrete/continuous | Continuous, with discrete planning states | Position, time, speed and steering vary continuously; the route planner abstracts location into towns. |
+| Dimension | Classification | Justification |
+|---|---|---|
+| **Observability** | **Partially observable** | Sensors only perceive the immediate surroundings. The trailer cannot see road conditions, accidents or traffic further down the A104 until it arrives, so it must make informed guesses about the state of the world ahead. |
+| **Determinism** | **Stochastic** | Many aspects lie beyond the agent's control, other drivers' behaviour, weather on the Mau escarpment, unmarked road works, livestock crossing. The same action in the same state does not guarantee the same resulting state. |
+| **Episodic / Sequential** | **Sequential** | Every choice constrains the next. Turning towards Narok at Mai Mahiu removes Nakuru and Kericho from reach without backtracking, so the current action depends on all previous actions. |
+| **Static / Dynamic** | **Dynamic** | The highway changes while the agent is deliberating, vehicles move, lights change, traffic builds. The trailer must consult the environment again before committing to an action. |
+| **Agents** | **Multi-agent** | The trailer shares the highway with other drivers, pedestrians and cyclists, each acting on their own performance measure. Some are competitive (lane and overtaking contests), some co-operative (yielding at junctions). |
 
-Route-planning assumptions: We use a fully known, static, deterministic, discrete graph during one search. Each edge has a fixed positive distance. Road feasibility for the trailer is TODO: state the assumption or verification. These assumptions simplify planning without changing the classification of actual driving.
+---
 
-## 2. Directed graph and search tree
+## 2. State Space: Directed Graph and Search Tree
 
-### 2.1 Problem formulation and abstraction
+### 2.1 Applying Abstraction
 
-| Item | Definition |
-| --- | --- |
-| Initial state | Nairobi |
-| State space | Towns in the verified graph below |
-| Actions | Travel along a permitted directed road link to an adjacent town |
-| Transition model | Following an edge from town u to town v changes the planning state to v |
-| Goal test | Current town = Kisumu |
-| Step cost | Recorded driving distance in kilometres for an edge |
-| Path cost | Sum of edge distances along the selected route |
+Abstraction means **leaving out irrelevant information**  keeping only the states and actions that contribute to solving the search problem.
 
-We retain towns, their highway connections, permitted direction and road distance. We omit individual bends, minor settlements, buildings and lane-level control. Smaller settlements may occur within an abstract edge. We do not omit competing routes solely because they appear longer before evaluating their costs.
+| Abstracted away | Reason |
+|---|---|
+| Individual roads, bends, lanes and junctions within a town | Irrelevant to choosing a route between towns |
+| Low-level actions (`steer left`, `brake`, `accelerate`, `change gear`) | Collapsed into one action: **`travel(Town A → Town B)`** |
+| Towns leading away from the goal (Nanyuki, Embu, Meru, Garissa, Namanga) | Cannot lie on any shortest Nairobi→Kisumu path |
+| Northern Rift (Kitale, Kapenguria) and far western border (Busia, Malaba) | Lie beyond Kisumu, expanding them only increases path cost |
+| Fuel stops, weighbridges, rest breaks | Do not change which town the agent is in |
 
-Map/reference used: https://www.google.com/maps/@-0.6429168,35.8398069,9.06z?entry=ttu&g_ep=EgoyMDI0MDgyOC4wIKXMDSoASAFQAw%3D%3D
+**Result:** a state = *the town the trailer is currently in*. An action = *travelling the highway link to an adjacent town*.
 
-| Region | Selected towns — verify against class map |
-| --- | --- |
-| Nairobi | Nairobi |
-| Central Highlands | Nyeri, Nyahururu |
-| Rift Valley | Naivasha, Nakuru, Narok, Kericho |
-| Lake Victoria Basin | Kisii, Kisumu |
+### 2.2 Towns in the State Space
 
-### 2.2 Edge distances and measurement evidence
+| Code | Town | Region |
+|---|---|---|
+| NBO | Nairobi | Nairobi |
+| THK | Thika | Central Highlands |
+| NYR | Nyeri | Central Highlands |
+| NYH | Nyahururu | Central Highlands |
+| NVS | Naivasha | Rift Valley |
+| NRK | Narok | Rift Valley |
+| NKU | Nakuru | Rift Valley |
+| BMT | Bomet | Rift Valley |
+| KRC | Kericho | Rift Valley |
+| ELD | Eldoret | Rift Valley |
+| KSI | Kisii | Lake Victoria Basin |
+| KKG | Kakamega | Lake Victoria Basin |
+| KSM | Kisumu | Lake Victoria Basin |
 
-The connections below are proposed examples to verify. Add missing connections and remove unsupported ones before searching. Each row currently denotes two directed edges with a shared cost under a symmetric-distance assumption; if not using that assumption, create separate forward and reverse rows and update the diagram.
+### 2.3 Directed Graph of the State Space
 
-Use consistent town endpoints and record the selected road corridor, not just town names.
-
-| Edge ID | From | To | Distance (km) | Selected road/via points and endpoints | Google Maps directions link | Date accessed |
-| --- | --- | --- | --- | --- | --- | --- |
-| E1 | Nairobi | Naivasha | TODO | TODO | TODO | TODO |
-| E2 | Naivasha | Nakuru | TODO | TODO | TODO | TODO |
-| E3 | Nairobi | Nyeri | TODO | TODO | TODO | TODO |
-| E4 | Nyeri | Nyahururu | TODO | TODO | TODO | TODO |
-| E5 | Nyahururu | Nakuru | TODO | TODO | TODO | TODO |
-| E6 | Nakuru | Kericho | TODO | TODO | TODO | TODO |
-| E7 | Kericho | Kisumu | TODO | TODO | TODO | TODO |
-| E8 | Nairobi | Narok | TODO | TODO | TODO | TODO |
-| E9 | Narok | Kisii | TODO | TODO | TODO | TODO |
-| E10 | Kisii | Kisumu | TODO | TODO | TODO | TODO |
-
-### 2.3 Directed graph
-
-Replace each `TODO` with the measured kilometres. Two arrows explicitly model travel in both directions. If reverse costs differ, label both arrows separately.
+Nodes are **states** (towns); links are **actions** (highway journeys), labelled with their **step cost in kilometres**. Edges are directed in the direction of travel towards the goal,  a second abstraction, since a shortest path to Kisumu never requires driving back east.
 
 ```mermaid
-flowchart TD
-    N["Nairobi"] -->|"E1: TODO km"| V["Naivasha"]
-    V -->|"E1 reverse: TODO km"| N
-    V -->|"E2: TODO km"| K["Nakuru"]
-    K -->|"E2 reverse: TODO km"| V
-    N -->|"E3: TODO km"| Y["Nyeri"]
-    Y -->|"E3 reverse: TODO km"| N
-    Y -->|"E4: TODO km"| H["Nyahururu"]
-    H -->|"E4 reverse: TODO km"| Y
-    H -->|"E5: TODO km"| K
-    K -->|"E5 reverse: TODO km"| H
-    K -->|"E6: TODO km"| R["Kericho"]
-    R -->|"E6 reverse: TODO km"| K
-    R -->|"E7: TODO km"| S["Kisumu"]
-    S -->|"E7 reverse: TODO km"| R
-    N -->|"E8: TODO km"| A["Narok"]
-    A -->|"E8 reverse: TODO km"| N
-    A -->|"E9: TODO km"| I["Kisii"]
-    I -->|"E9 reverse: TODO km"| A
-    I -->|"E10: TODO km"| S
-    S -->|"E10 reverse: TODO km"| I
+graph LR
+    NBO["Nairobi<br/>(initial state)"]
+    THK[Thika]
+    NYR[Nyeri]
+    NYH[Nyahururu]
+    NVS[Naivasha]
+    NRK[Narok]
+    NKU[Nakuru]
+    BMT[Bomet]
+    KRC[Kericho]
+    ELD[Eldoret]
+    KSI[Kisii]
+    KKG[Kakamega]
+    KSM["Kisumu<br/>(goal state)"]
+
+    NBO -->|45| THK
+    NBO -->|90| NVS
+    NBO -->|142| NRK
+    THK -->|106| NYR
+    NYR -->|104| NYH
+    NYH -->|64| NKU
+    NVS -->|71| NKU
+    NVS -->|90| NRK
+    NRK -->|97| BMT
+    NKU -->|110| KRC
+    NKU -->|155| ELD
+    BMT -->|50| KRC
+    BMT -->|68| KSI
+    KRC -->|90| KSM
+    KRC -->|85| KSI
+    KSI -->|118| KSM
+    ELD -->|80| KKG
+    KKG -->|52| KSM
+
+    style NBO fill:#1C3F63,color:#fff
+    style KSM fill:#127A73,color:#fff
 ```
 
-### 2.4 Abstract search tree
+### 2.4 Adjacency / Step Cost Table
 
-This starter shows selected route histories only. It is a partial tree, not the completed uniform-cost expansion trace. Repeated towns have separate node IDs because they represent different paths. Immediate returns to ancestors are omitted because positive-cost cycles cannot improve a route. Other legal branches must be added or their pruning explained using actual best-known costs.
+| From | To | Highway | Step cost (km) |
+|---|---|---|---|
+| Nairobi | Thika | A2 | 45 |
+| Nairobi | Naivasha | A104 | 90 |
+| Nairobi | Narok | B3 (via Mai Mahiu) | 142 |
+| Thika | Nyeri | A2 | 106 |
+| Nyeri | Nyahururu | B5 | 104 |
+| Nyahururu | Nakuru | B5 | 64 |
+| Naivasha | Nakuru | A104 | 71 |
+| Naivasha | Narok | B3 | 90 |
+| Narok | Bomet | B3 | 97 |
+| Nakuru | Kericho | B1 | 110 |
+| Nakuru | Eldoret | A104 | 155 |
+| Bomet | Kericho | C23 | 50 |
+| Bomet | Kisii | B3 | 68 |
+| Kericho | Kisumu | B1 | 90 |
+| Kericho | Kisii | C23 | 85 |
+| Kisii | Kisumu | B1 | 118 |
+| Eldoret | Kakamega | A104/B2 | 80 |
+| Kakamega | Kisumu | B2 | 52 |
+
+> Distances taken from Google Maps road measurements between town centres. Nairobi–Nakuru (90 + 71 = 161 km), Nairobi–Nyeri (45 + 106 = 151 km), Nyeri–Nyahururu (104 km) and Nyahururu–Nakuru (64 km) agree with the figures used in the lecture worked example.
+
+### 2.5 Search Tree
+
+The tree starts at the **initial state** (root) and branches out through actions to other states within the state space. Nodes are shown with their **cumulative path cost g(n)** in kilometres.
 
 ```mermaid
-flowchart TD
-    T0["Nairobi: g=0"] --> T1["Naivasha: g=TODO"]
-    T0 --> T2["Nyeri: g=TODO"]
-    T0 --> T3["Narok: g=TODO"]
-    T1 --> T4["Nakuru: g=TODO"]
-    T2 --> T5["Nyahururu: g=TODO"]
-    T5 --> T6["Nakuru: g=TODO"]
-    T4 --> T7["Kericho: g=TODO"]
-    T6 --> T8["Kericho: g=TODO"]
-    T3 --> T9["Kisii: g=TODO"]
-    T7 --> T10["Kisumu: g=TODO"]
-    T8 --> T11["Kisumu: g=TODO"]
-    T9 --> T12["Kisumu: g=TODO"]
+graph TD
+    R["Nairobi<br/>g = 0"]
+
+    R --> A["Thika<br/>g = 45"]
+    R --> B["Naivasha<br/>g = 90"]
+    R --> C["Narok<br/>g = 142"]
+
+    A --> A1["Nyeri<br/>g = 151"]
+    A1 --> A2["Nyahururu<br/>g = 255"]
+    A2 --> A3["Nakuru<br/>g = 319 ✗"]
+
+    B --> B1["Nakuru<br/>g = 161"]
+    B --> B2["Narok<br/>g = 180 ✗"]
+
+    B1 --> B3["Kericho<br/>g = 271"]
+    B1 --> B4["Eldoret<br/>g = 316"]
+
+    B3 --> B5["KISUMU<br/>g = 361 ✓"]
+    B3 --> B6["Kisii<br/>g = 356 ✗"]
+
+    B4 --> B7["Kakamega<br/>g = 396"]
+    B7 --> B8["Kisumu<br/>g = 448"]
+
+    C --> C1["Bomet<br/>g = 239"]
+    C1 --> C2["Kericho<br/>g = 289 ✗"]
+    C1 --> C3["Kisii<br/>g = 307"]
+    C3 --> C4["Kisumu<br/>g = 425"]
+
+    style R fill:#1C3F63,color:#fff
+    style B5 fill:#127A73,color:#fff
+    style A3 fill:#F3DCDC
+    style B2 fill:#F3DCDC
+    style B6 fill:#F3DCDC
+    style C2 fill:#F3DCDC
 ```
 
-**Final tree scope and pruning explanation:** TODO: extend the tree or state every omitted branch category and justify it. Cumulative cost g is the sum from Nairobi to that tree node.
+**Legend** — ✓ goal state reached at least cost · ✗ branch pruned: a cheaper path to that same state already exists
 
-## 3. Optimal path from Nairobi to Kisumu
+---
 
-### 3.1 Search method
+## 3. Determining the Optimal Path
 
-We use uniform-cost graph search with positive edge distances. The frontier is ordered by cumulative path cost g. We retain the least known cost and predecessor for each town, update them when a cheaper path is found, and discard stale higher-cost entries. Equal-cost ties are broken alphabetically. We stop when Kisumu is removed as the minimum-cost frontier entry, not when it is first generated.
+### 3.1 Path Cost Function
 
-### 3.2 Search trace
+```
+g(n) = Σ (step costs of all individual actions along the path)
+```
 
-Add one row per actual expansion. The initial frontier is `{Nairobi: 0}`. Show each updated frontier in increasing cost order, using `Town: cumulative_km`.
+where each step cost is the **road distance in kilometres** between two adjacent towns. This reflects the agent's performance measure (shortest total distance).
 
-| Step | Town removed | g (km) | Neighbour updates and predecessor changes | Frontier after expansion |
-| --- | --- | --- | --- | --- |
-| 1 | Nairobi | 0 | TODO | TODO |
-| TODO | TODO | TODO | TODO | TODO |
+**Goal test:** *is the trailer's current state Kisumu?*
 
-### 3.3 Supporting route calculations
+### 3.2 Search Strategy
 
-These are candidate routes from the example network, not a proof that no other modelled route is cheaper. Update them to match the verified graph and show numerical addition.
+**Uniform-cost search** (Dijkstra's algorithm) — always expand the frontier node with the lowest g(n). This guarantees the optimal (least-cost) solution when all step costs are positive, which holds here since every step cost is a distance greater than zero.
 
-| Candidate | Route | Segment calculation (km) | Total (km) |
-| --- | --- | --- | --- |
-| A | Nairobi → Naivasha → Nakuru → Kericho → Kisumu | E1 + E2 + E6 + E7 = TODO | TODO |
-| B | Nairobi → Nyeri → Nyahururu → Nakuru → Kericho → Kisumu | E3 + E4 + E5 + E6 + E7 = TODO | TODO |
-| C | Nairobi → Narok → Kisii → Kisumu | E8 + E9 + E10 = TODO | TODO |
+### 3.3 Search Trace
 
-### 3.4 Result and justification
+| Step | Node expanded | g(n) | Frontier after expansion (ordered by g) |
+|---|---|---|---|
+| 1 | Nairobi | 0 | Thika 45, Naivasha 90, Narok 142 |
+| 2 | Thika | 45 | Naivasha 90, Narok 142, Nyeri 151 |
+| 3 | Naivasha | 90 | Narok 142, Nyeri 151, Nakuru 161 *(Narok 180 discarded)* |
+| 4 | Narok | 142 | Nyeri 151, Nakuru 161, Bomet 239 |
+| 5 | Nyeri | 151 | Nakuru 161, Bomet 239, Nyahururu 255 |
+| 6 | **Nakuru** | **161** | Bomet 239, Nyahururu 255, Kericho 271, Eldoret 316 |
+| 7 | Bomet | 239 | Nyahururu 255, Kericho 271, Kisii 307, Eldoret 316 *(Kericho 289 discarded)* |
+| 8 | Nyahururu | 255 | Kericho 271, Kisii 307, Eldoret 316 *(Nakuru 319 discarded)* |
+| 9 | **Kericho** | **271** | Kisii 307, Eldoret 316, Kisumu 361 *(Kisii 356 discarded)* |
+| 10 | Kisii | 307 | Eldoret 316, Kisumu 361 *(Kisumu 425 discarded)* |
+| 11 | Eldoret | 316 | Kisumu 361, Kakamega 396 |
+| 12 | **Kisumu** | **361** | **GOAL TEST PASSED — search terminates** |
 
-**Selected route:** TODO  
-**Distance calculation:** TODO + TODO + … = TODO km.
+### 3.4 Comparison of Candidate Routes
 
-Kisumu was removed from the frontier with cumulative cost TODO km. At that point no remaining frontier entry had a lower cost. Because all step costs are positive and uniform-cost search always expands the cheapest frontier path, this is the shortest route within our modelled network and recorded distances. The result does not establish the shortest route over roads omitted from our abstraction.
+| Route | Path | Total cost (km) |
+|---|---|---|
+| **1 — A104 / B1 corridor** | **Nairobi → Naivasha → Nakuru → Kericho → Kisumu** | **361**  |
+| 2 — Narok / Bomet | Nairobi → Narok → Bomet → Kericho → Kisumu | 379 |
+| 3 — Narok / Kisii | Nairobi → Narok → Bomet → Kisii → Kisumu | 425 |
+| 4 — Northern A104 | Nairobi → Naivasha → Nakuru → Eldoret → Kakamega → Kisumu | 448 |
+| 5 — Central Highlands | Nairobi → Thika → Nyeri → Nyahururu → Nakuru → Kericho → Kisumu | 519 |
 
-## 4. Evidence of groupwork
+### 3.5 Optimal Solution
 
-### 4.1 Meeting minutes
+> ### Nairobi → Naivasha → Nakuru → Kericho → Kisumu
+> ### Total path cost = 90 + 71 + 110 + 90 = **361 km**
 
-Record a real meeting; duplicate this section if necessary.
+**Step 4 — Execute:** the trailer carries out this sequence of actions, travelling the A104 from Nairobi through Naivasha to Nakuru, then the B1 through Kericho to Kisumu. It is the optimal solution because it has the **least path cost** of all paths from the initial state to the goal state.
 
-**Date and time:** TODO  
-**Location/platform:** TODO  
-**Attendees:** TODO  
-**Apologies/absent members:** TODO  
-**Chair and minute taker:** TODO
+**Why the alternatives lose:**
+- Route 2 and 3 (Narok) — the B3 swings south-west through Narok and Bomet, adding distance before rejoining the corridor.
+- Route 4 (Eldoret) — the A104 continues north-west past the Kisumu turn-off, so Kakamega is a detour.
+- Route 5 (Central Highlands) — the A2/B5 loop north through Nyeri and Nyahururu before reaching Nakuru, repeating the lecture's point that the longer Nyeri route should be abstracted out.
 
-| Agenda | Discussion | Decision | Responsible member |
-| --- | --- | --- | --- |
-| PEAS and environment | TODO | TODO | TODO |
-| Towns, roads and abstraction | TODO | TODO | TODO |
-| Google Maps distances | TODO | TODO | TODO |
-| Search and optimal route | TODO | TODO | TODO |
-| GitHub review and submission | TODO | TODO | TODO |
+---
 
-**Completed actions and review confirmation:** TODO: record actual work, dates and who checked it.
+## 4. Evidence of Groupwork
 
-### 4.2 Fork and contribution evidence
+### 4.1 Team Photograph
+![alt text](<WhatsApp Image 2026-10-14 at 15.36.05-1.jpeg>)
 
-Add rows for all members. For the original owner, identify their owner role and link their commits rather than inventing a same-account fork.
 
-| Member | Fork URL or original-owner role | Contribution/commit link | Pull request link where applicable |
-| --- | --- | --- | --- |
-| TODO | TODO | TODO | TODO |
-| TODO | TODO | TODO | TODO |
 
-### 4.3 Optional group photo
+ALL MEMEBERS PRESENT DURING THE GOOGLE MEET
 
-If using a photo, upload the actual image to `images/team-photo.jpg`, then replace this paragraph with `![Group discussion showing participating members](images/team-photo.jpg)` and identify the participants. Remove this optional section if using minutes alone.
 
-## 5. References
 
-1. Practical Exercise 3 assignment instructions, ICS 3202, August–November 2026.
-2. Allan Vikiru, *Problem Solving Agents*, supplied class slides. The slides carry the label BBT 3201; this submission follows the assignment's ICS 3202 label.
-3. Class highway map/reference: TODO.
-4. Google Maps driving-distance sources and access dates: see edge measurement table.
+
+
