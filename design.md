@@ -8,7 +8,7 @@
 **Group members**
 Austine Igunza -166990
 Paul Kiragu - 190135
-Chief Mwijukwe - 192468
+Mwijukye Chief Cedrick - 192468
 ---
 
 ## 1. Agent Design
