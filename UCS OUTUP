@@ -1,0 +1,134 @@
+ARTIFICIAL INTELLIGENCE  -  PRACTICAL EXERCISE 3
+  PROBLEM-SOLVING AGENT: SELF-DRIVING TRAILER
+  UNIFORM COST SEARCH ACROSS KENYA'S HIGHWAY NETWORK
+
+==============================================================================
+STEP 1: GOAL FORMULATION
+==============================================================================
+  Agent        : Self-driving trailer
+  Environment  : Kenya's Highway Network
+  Initial state: Nairobi
+  Goal state   : Kisumu
+
+==============================================================================
+STEP 2: PROBLEM FORMULATION
+==============================================================================
+  1. Initial state      : Nairobi
+  2. State space        : 13 towns, 18 directed links (actions)
+  3. Goal test          : is the trailer's current state 'Kisumu'?
+  4. Path cost function : g(n) = sum of step costs, where each
+                          step cost is road distance in km
+
+  Abstraction applied: low-level actions (steer, brake, accelerate)
+  are collapsed into a single action 'travel(Town A -> Town B)'.
+
+  FROM        TO          HIGHWAY    STEP COST (km)
+  -------------------------------------------------
+  Nairobi     Thika       A2                     45
+  Nairobi     Naivasha    A104                   90
+  Nairobi     Narok       B3                    142
+  Thika       Nyeri       A2                    106
+  Nyeri       Nyahururu   B5                    104
+  Nyahururu   Nakuru      B5                     64
+  Naivasha    Nakuru      A104                   71
+  Naivasha    Narok       B3                     90
+  Narok       Bomet       B3                     97
+  Nakuru      Kericho     B1                    110
+  Nakuru      Eldoret     A104                  155
+  Bomet       Kericho     C23                    50
+  Bomet       Kisii       B3                     68
+  Kericho     Kisumu      B1                     90
+  Kericho     Kisii       C23                    85
+  Eldoret     Kakamega    A104/B2                80
+  Kisii       Kisumu      B1                    118
+  Kakamega    Kisumu      B2                     52
+
+==============================================================================
+STEP 3: SEARCH  -  UNIFORM COST SEARCH
+==============================================================================
+  Strategy: always expand the frontier node with the lowest g(n)
+
+  Step  1: EXPAND Nairobi     g = 0
+           Frontier : Thika 45, Naivasha 90, Narok 142
+
+  Step  2: EXPAND Thika       g = 45
+           Frontier : Naivasha 90, Narok 142, Nyeri 151
+
+  Step  3: EXPAND Naivasha    g = 90
+           Frontier : Narok 142, Nyeri 151, Nakuru 161
+           Discarded: Narok 180 worse than 142
+
+  Step  4: EXPAND Narok       g = 142
+           Frontier : Nyeri 151, Nakuru 161, Bomet 239
+
+  Step  5: EXPAND Nyeri       g = 151
+           Frontier : Nakuru 161, Bomet 239, Nyahururu 255
+
+  Step  6: EXPAND Nakuru      g = 161
+           Frontier : Bomet 239, Nyahururu 255, Kericho 271, Eldoret 316
+
+  Step  7: EXPAND Bomet       g = 239
+           Frontier : Nyahururu 255, Kericho 271, Kisii 307, Eldoret 316
+           Discarded: Kericho 289 worse than 271
+
+  Step  8: EXPAND Nyahururu   g = 255
+           Frontier : Kericho 271, Kisii 307, Eldoret 316
+           Discarded: Nakuru 319 already explored at 161
+
+  Step  9: EXPAND Kericho     g = 271
+           Frontier : Kisii 307, Eldoret 316, Kisumu 361
+           Discarded: Kisii 356 worse than 307
+
+  Step 10: EXPAND Kisii       g = 307
+           Frontier : Eldoret 316, Kisumu 361
+           Discarded: Kisumu 425 worse than 361
+
+  Step 11: EXPAND Eldoret     g = 316
+           Frontier : Kisumu 361, Kakamega 396
+
+  Step 12: EXPAND Kisumu      g = 361  <-- GOAL TEST PASSED
+
+  Search terminates after 12 expansions.
+
+==============================================================================
+STEP 4: EXECUTE  -  OPTIMAL SOLUTION
+==============================================================================
+  #   ACTION                                           STEP COST      g(n)
+  ------------------------------------------------------------------------
+  1   Nairobi -> Naivasha  (A104)                             90        90
+  2   Naivasha -> Nakuru  (A104)                              71       161
+  3   Nakuru -> Kericho  (B1)                                110       271
+  4   Kericho -> Kisumu  (B1)                                 90       361
+  ------------------------------------------------------------------------
+
+  OPTIMAL PATH :  Nairobi  ->  Naivasha  ->  Nakuru  ->  Kericho  ->  Kisumu
+  PATH COST    :  90 + 71 + 110 + 90 = 361 km
+
+  The trailer travels 361 km from Nairobi to Kisumu.
+  This is the optimal solution because uniform cost search returns
+  the path with the LEAST path cost.
+
+==============================================================================
+VERIFICATION: ALL CANDIDATE ROUTES
+==============================================================================
+  #   ROUTE                                                                     COST (km)
+  ---------------------------------------------------------------------------------------
+  1   Nairobi -> Naivasha -> Nakuru -> Kericho -> Kisumu                              361   <-- OPTIMAL
+  2   Nairobi -> Narok -> Bomet -> Kericho -> Kisumu                                  379
+  3   Nairobi -> Naivasha -> Narok -> Bomet -> Kericho -> Kisumu                      417
+  4   Nairobi -> Narok -> Bomet -> Kisii -> Kisumu                                    425
+  5   Nairobi -> Naivasha -> Nakuru -> Eldoret -> Kakamega -> Kisumu                  448
+  6   Nairobi -> Naivasha -> Narok -> Bomet -> Kisii -> Kisumu                        463
+  7   Nairobi -> Naivasha -> Nakuru -> Kericho -> Kisii -> Kisumu                     474
+  8   Nairobi -> Narok -> Bomet -> Kericho -> Kisii -> Kisumu                         492
+  9   Nairobi -> Thika -> Nyeri -> Nyahururu -> Nakuru -> Kericho -> Kisumu           519
+  10  Nairobi -> Naivasha -> Narok -> Bomet -> Kericho -> Kisii -> Kisumu             530
+  11  Nairobi -> Thika -> Nyeri -> Nyahururu -> Nakuru -> Eldoret -> Kakamega -> Kisumu        606
+  12  Nairobi -> Thika -> Nyeri -> Nyahururu -> Nakuru -> Kericho -> Kisii -> Kisumu        632
+
+  Total distinct routes                     : 12
+  Cheapest route found by exhaustive search : 361 km
+  Route returned by uniform cost search     : 361 km
+  UCS returned the optimal path             : True
+
+  States expanded: 12   Nodes discarded: 5
