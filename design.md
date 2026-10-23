@@ -1,6 +1,6 @@
 # Designing a Searching Agent — Self-Driving Trailer
 
-**ICS 3202: Artificial Intelligence — Practical Exercise 3**
+**Artificial Intelligence — Practical Exercise 3**
 *
 
 **Problem:** A self-driving trailer must travel from **Nairobi** to **Kisumu** across Kenya's highway network at the lowest possible path cost.
@@ -73,6 +73,7 @@ Abstraction means **leaving out irrelevant information**  keeping only the state
 ### 2.3 Directed Graph of the State Space
 
 Nodes are **states** (towns); links are **actions** (highway journeys), labelled with their **step cost in kilometres**. Edges are directed in the direction of travel towards the goal,  a second abstraction, since a shortest path to Kisumu never requires driving back east.
+
 
 ![alt text](image.png)
 
